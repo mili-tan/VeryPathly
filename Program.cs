@@ -1,5 +1,7 @@
 ﻿using System.Net;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using AspNetCoreRateLimit;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.AspNetCore.Builder;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ProxyKit;
+using Timer = System.Timers.Timer;
 
 namespace VeryPathly
 {
@@ -21,6 +24,7 @@ namespace VeryPathly
         public static bool UsePath = true;
         public static int TimeOut = 60;
         public static List<string> AuthorizedPrefix = new List<string>();
+        public static byte[] AuthorizedPrefixFileHash = [];
 
         static void Main(string[] args)
         {
@@ -78,12 +82,32 @@ namespace VeryPathly
                     cmd.ShowHelp();
                     return;
                 }
-
-                var lines = File.ReadAllLines(fileArgument.Value!);
-                foreach (var line in lines)
+                if (File.Exists(fileArgument.Value))
                 {
-                    var parts = line.Split(',');
-                    AuthorizedPrefix.Add(parts.First());
+                    var sha = SHA256.Create();
+                    var timer = new Timer(1);
+                    timer.Elapsed += (_, _) =>
+                    {
+                        try
+                        {
+                            timer.Interval = 10000;
+                            var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(File.ReadAllText(fileArgument.Value!)));
+                            if (AuthorizedPrefixFileHash.SequenceEqual(hash)) return;
+                            AuthorizedPrefixFileHash = hash;
+                            AuthorizedPrefix = File.ReadAllLines(fileArgument.Value!).ToList();
+                            Console.WriteLine("Authorization Updated");
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
+                        }
+                    };
+                    timer.Start();
+                }
+                else
+                {
+                    Console.WriteLine("File not found");
+                    return;
                 }
 
                 var host = new WebHostBuilder()
