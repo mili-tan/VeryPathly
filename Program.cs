@@ -27,8 +27,8 @@ namespace VeryPathly
             var isZh = Thread.CurrentThread.CurrentCulture.Name.Contains("zh");
             var cmd = new CommandLineApplication
             {
-                Name = "VeryPathly.Gateway",
-                Description = "VeryPathly.Gateway - Very simple URL auth reverse proxy." +
+                Name = "VeryPathly",
+                Description = "VeryPathly - Very simple URL auth reverse proxy." +
                               Environment.NewLine +
                               $"Copyright (c) {DateTime.Now.Year} AS-Lab. Code released under the MIT License"
             };
@@ -37,19 +37,19 @@ namespace VeryPathly
                 isZh ? "授权前缀 CSV（第一列）" : "Authorized Prefix CSV（First column）", multipleValues: false);
 
             var ipOption = cmd.Option<string>("-l|--listen <IPEndPoint>",
-                isZh ? "监听的地址与端口。" : "Set server listening address and port",
+                isZh ? "监听的地址与端口。" : "Set server listening address and port <127.0.0.1:8080>",
                 CommandOptionType.SingleValue);
-            var targetOption = cmd.Option<string>("-t|--target <Uri>",
-                isZh ? "目标地址与端口。" : "Set target address and port",
+            var targetOption = cmd.Option<string>("-t|--target <Url>",
+                isZh ? "目标地址与端口。" : "Set target address and port <http://127.0.0.1:2000>",
                 CommandOptionType.SingleValue);
 
             var httpsOption = cmd.Option("-s|--https",
                 isZh ? "启用 HTTPS。（默认自签名，不推荐）" : "Set enable HTTPS (Self-signed by default, not recommended)",
                 CommandOptionType.NoValue);
-            var pemOption = cmd.Option<string>("-pem|--pemfile <FilePath>",
+            var pemOption = cmd.Option<string>("-pem|--pem-file <FilePath>",
                 isZh ? "PEM 证书路径。 <./cert.pem>" : "Set your pem certificate file path <./cert.pem>",
                 CommandOptionType.SingleOrNoValue);
-            var keyOption = cmd.Option<string>("-key|--keyfile <FilePath>",
+            var keyOption = cmd.Option<string>("-key|--key-file <FilePath>",
                 isZh ? "PEM 证书密钥路径。 <./cert.key>" : "Set your pem certificate key file path <./cert.key>",
                 CommandOptionType.SingleOrNoValue);
             var crosOption = cmd.Option("-c|--cors",
@@ -62,13 +62,13 @@ namespace VeryPathly
                 isZh ? "启用请求速率限制。(请在 ipratelimiting.json 中设置)" : "Enable request rate limiting (with ipratelimiting.json)",
                 CommandOptionType.NoValue);
             var timeOutOption = cmd.Option<int>("-o|--timeout <Seconds>",
-                isZh ? "请求超时时间(秒)。" : "Set request timeout in seconds",
+                isZh ? "请求超时时间(秒)。" : "Set request timeout in seconds <15>",
                 CommandOptionType.SingleValue);
 
             cmd.OnExecute(() =>
             {
-                if (ipOption.HasValue()) ListenUrl = ipOption.Value();
-                if (targetOption.HasValue()) TargetUrl = targetOption.Value();
+                if (ipOption.HasValue()) ListenUrl = ipOption.Value()!;
+                if (targetOption.HasValue()) TargetUrl = targetOption.Value()!;
                 if (crosOption.HasValue()) UseCors = true;
                 if (useRateLimitOption.HasValue()) UseRateLimiting = true;
                 if (pathOption.HasValue()) UsePath = true;
@@ -79,7 +79,7 @@ namespace VeryPathly
                     return;
                 }
 
-                var lines = File.ReadAllLines(fileArgument.Value);
+                var lines = File.ReadAllLines(fileArgument.Value!);
                 foreach (var line in lines)
                 {
                     var parts = line.Split(',');
@@ -88,7 +88,7 @@ namespace VeryPathly
 
                 var host = new WebHostBuilder()
                     .UseKestrel()
-                    .UseContentRoot(AppDomain.CurrentDomain.SetupInformation.ApplicationBase)
+                    .UseContentRoot(AppDomain.CurrentDomain.SetupInformation.ApplicationBase!)
                     .ConfigureServices(services =>
                     {
                         services.AddRouting();
@@ -120,7 +120,7 @@ namespace VeryPathly
                                 if (httpsOption.HasValue()) listenOptions.UseHttps();
                                 if (pemOption.HasValue() && keyOption.HasValue())
                                     listenOptions.UseHttps(X509Certificate2.CreateFromPem(
-                                        File.ReadAllText(pemOption.Value()), File.ReadAllText(keyOption.Value())));
+                                        File.ReadAllText(pemOption.Value()!), File.ReadAllText(keyOption.Value()!)));
                             });
                     }).Configure(app =>
                     {
@@ -146,6 +146,7 @@ namespace VeryPathly
                                 return;
                             }
 
+                            context.Items["Token"] = prefix;
                             await next.Invoke();
                         });
 
@@ -153,8 +154,8 @@ namespace VeryPathly
                         {
                             svr.RunProxy(async context =>
                             {
-                                context.Request.PathBase = context.Request.PathBase.Value.Replace($"/{context.Items["Token"]}/", "/");
-                                context.Request.Path = context.Request.Path.Value.Replace($"/{context.Items["Token"]}/", "/");
+                                context.Request.PathBase = context.Request.PathBase.Value?.Replace($"/{context.Items["Token"]}/", "/");
+                                context.Request.Path = context.Request.Path.Value?.Replace($"/{context.Items["Token"]}/", "/");
                                 var response = await context
                                     .ForwardTo(
                                         new Uri(TargetUrl))
