@@ -37,7 +37,7 @@ namespace VeryPathly
                 isZh ? "授权前缀 CSV（第一列）" : "Authorized Prefix CSV（First column）", multipleValues: false);
 
             var ipOption = cmd.Option<string>("-l|--listen <IPEndPoint>",
-                isZh ? "监听的地址与端口。" : "Set server listening address and port <127.0.0.1:8080>",
+                isZh ? "监听的地址与端口。" : "Set server listening address and port <http://127.0.0.1:8080>",
                 CommandOptionType.SingleValue);
             var targetOption = cmd.Option<string>("-t|--target <Url>",
                 isZh ? "目标地址与端口。" : "Set target address and port <http://127.0.0.1:2000>",
@@ -136,10 +136,10 @@ namespace VeryPathly
                             }
 
                             var prefix = UsePath
-                                ? context.Request.Path.Value?.Split("/").First()
+                                ? context.Request.Path.Value?.TrimStart('/').Split("/").First()
                                 : context.Request.Host.Value.Split(".").First();
 
-                            if (prefix != null && !AuthorizedPrefix.Contains(prefix))
+                            if (prefix == null || !AuthorizedPrefix.Contains(prefix))
                             {
                                 context.Response.StatusCode = 404;
                                 await context.Response.WriteAsync("Not Found");
